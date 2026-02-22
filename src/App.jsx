@@ -56,6 +56,7 @@ function App() {
     speechRecognizing: false,
     badWordsSet: new Set(BLOCKLIST),
     advanceTimeout: null,
+    joinRetryCount: 0,
   });
 
   const [status, setStatus] = useState("Disconnected");
@@ -276,6 +277,36 @@ function App() {
     });
   }
 
+  function retryJoinWithNewName() {
+    if (!stateRef.current.roomId) return;
+    if (stateRef.current.joinRetryCount >= 3) {
+      setStatus("Name still taken. Please pick another name.");
+      return;
+    }
+    stateRef.current.joinRetryCount += 1;
+    const suffix = Math.floor(Math.random() * 1000);
+    const base = (playerName || stateRef.current.selfName || "Player").trim();
+    const newName = `${base}${suffix}`;
+    stateRef.current.selfName = newName;
+    setPlayerName(newName);
+    if (stateRef.current.peer) {
+      stateRef.current.peer.destroy();
+      stateRef.current.peer = null;
+    }
+    const peer = new Peer();
+    peer.on("open", () => {
+      stateRef.current.peer = peer;
+      const conn = peer.connect(stateRef.current.roomId);
+      handleConnection(conn);
+      conn.on("open", () => {
+        conn.send({ type: "join", name: stateRef.current.selfName || "Guest" });
+      });
+    });
+    peer.on("error", () => {
+      setStatus("Peer error");
+    });
+  }
+
   function cleanupPeer() {
     const { peer } = stateRef.current;
     if (peer) peer.destroy();
@@ -329,9 +360,30 @@ function App() {
       setStatus(`Connected to ${conn.peer}`);
       return;
     }
+    if (payload.type === "reject") {
+      const reason = payload.reason || "Connection rejected.";
+      setStatus(reason);
+      if (!stateRef.current.isHost && reason.toLowerCase().includes("name already taken")) {
+        retryJoinWithNewName();
+      }
+      return;
+    }
+    if (payload.type === "reset") {
+      applyReset();
+      return;
+    }
 
     if (stateRef.current.isHost) {
       if (payload.type === "join") {
+        const incomingName = (payload.name || "").trim();
+        const nameTaken = stateRef.current.game?.players.some(
+          (player) => player.name.toLowerCase() === incomingName.toLowerCase()
+        );
+        if (nameTaken) {
+          conn.send({ type: "reject", reason: "Name already taken." });
+          conn.close();
+          return;
+        }
         assignPlayer(conn, payload.name);
       }
       if (payload.type === "action") {
@@ -379,7 +431,7 @@ function App() {
   function handleAction(action, payload, fromId) {
     if (!stateRef.current.game) return;
     const playerIndex = stateRef.current.game.players.findIndex((p) => p.id === fromId);
-    if (playerIndex !== stateRef.current.game.turnIndex) return;
+    if (action !== "restart" && playerIndex !== stateRef.current.game.turnIndex) return;
     if (action === "roll") {
       if (!stateRef.current.game.started) startGame();
       rollDice();
@@ -387,6 +439,11 @@ function App() {
     if (action === "move") {
       if (!stateRef.current.game.started) return;
       moveToken(playerIndex, payload.tokenIndex);
+    }
+    if (action === "restart") {
+      applyReset();
+      broadcast({ type: "reset" });
+      broadcastState();
     }
   }
 
@@ -1013,6 +1070,7 @@ function App() {
     if (!roomId.trim()) return;
     stateRef.current.isHost = false;
     stateRef.current.selfName = playerName.trim();
+    stateRef.current.joinRetryCount = 0;
     stateRef.current.roomId = roomId.trim();
     createPeer();
     stateRef.current.peer.on("open", () => {
@@ -1030,37 +1088,41 @@ function App() {
     });
   }
 
-  function resetPeer() {
-    cleanupPeer();
-    stateRef.current.connections.clear();
-    stateRef.current.isHost = false;
-    stateRef.current.selfId = null;
-    stateRef.current.assignedIndex = null;
-    stateRef.current.roomId = null;
-    stateRef.current.game = null;
+  function applyReset() {
+    const currentGame = stateRef.current.game;
+    if (!currentGame) return;
     if (stateRef.current.advanceTimeout) {
       clearTimeout(stateRef.current.advanceTimeout);
       stateRef.current.advanceTimeout = null;
     }
-    if (stateRef.current.three.tokensGroup && stateRef.current.three.scene) {
-      stateRef.current.three.scene.remove(stateRef.current.three.tokensGroup);
-    }
-    stateRef.current.three.tokensGroup = null;
-    stateRef.current.three.tokenMeshes = [];
-    stateRef.current.three.diceRoll = null;
-    if (stateRef.current.three.diceMesh) {
-      stateRef.current.three.diceMesh.visible = false;
-      stateRef.current.three.diceMesh.rotation.set(0, 0, 0);
-    }
-    setRoomLocked(false);
-    setRoomId("");
-    setStatus("Disconnected");
+    const players = currentGame.players.map((player) => ({
+      ...player,
+      tokens: [-1, -1, -1, -1],
+    }));
+    const newGame = initGame(players);
+    newGame.message = "Game reset";
+    updateGame(newGame, stateRef.current.assignedIndex);
     setChatLog([]);
     setChatInput("");
-    setVoiceWarning("");
-    setVoiceEnabled(false);
-    setAudioMuted(false);
-    updateGame(null, null);
+    if (stateRef.current.three.diceMesh) {
+      stateRef.current.three.diceMesh.rotation.set(0, 0, 0);
+      stateRef.current.three.diceRoll = null;
+    }
+  }
+
+  function requestRestart() {
+    if (!stateRef.current.game) return;
+    if (stateRef.current.isHost) {
+      applyReset();
+      broadcast({ type: "reset" });
+      broadcastState();
+    } else {
+      sendToHost({ type: "action", action: "restart", payload: {} });
+    }
+  }
+
+  function resetPeer() {
+    requestRestart();
   }
 
   function generateRoomName() {
@@ -1340,7 +1402,7 @@ function App() {
             <h2>Voice</h2>
             <p className="hint">Hold to talk. Safety filter blocks harmful words.</p>
             <div className="button-row single-line">
-              <button className="ghost" onClick={enableVoice} disabled={!isInRoom}>
+              <button className="ghost" onClick={enableVoice} disabled={!isInRoom || voiceEnabled}>
                 Enable Mic
               </button>
               <button className="ghost" onClick={toggleMuteAll} disabled={!isInRoom}>
