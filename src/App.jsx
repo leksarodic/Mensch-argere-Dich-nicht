@@ -72,6 +72,8 @@ function App() {
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [voiceWarning, setVoiceWarning] = useState("");
   const [showDisclaimer, setShowDisclaimer] = useState(true);
+  const [showSystemNotice, setShowSystemNotice] = useState(false);
+  const [systemNoticeText, setSystemNoticeText] = useState("");
   const [audioMuted, setAudioMuted] = useState(false);
   const [rooms, setRooms] = useState(() => {
     try {
@@ -83,6 +85,7 @@ function App() {
   });
   const chatInputRef = useRef(null);
   const isMobileRef = useRef(false);
+  const leftMessageHandledRef = useRef(false);
   const prevRollIdRef = useRef(null);
 
   const isMyTurn = useMemo(() => {
@@ -136,6 +139,7 @@ function App() {
     if (!game) {
       setDiceValue("–");
       setTurnText("Waiting for host…");
+      leftMessageHandledRef.current = false;
       return;
     }
     setDiceValue(game.dice || "–");
@@ -146,6 +150,11 @@ function App() {
       triggerDiceRoll(game.dice, game.rollId);
     }
     prevRollIdRef.current = game.rollId;
+    if (game.message.includes("left the table") && !leftMessageHandledRef.current) {
+      leftMessageHandledRef.current = true;
+      setSystemNoticeText(game.message);
+      setShowSystemNotice(true);
+    }
   }, [game, assignedIndex]);
 
   function updateGame(nextGame, nextAssignedIndex = assignedIndex) {
@@ -329,6 +338,7 @@ function App() {
     conn.on("close", () => {
       stateRef.current.connections.delete(conn.peer);
       if (stateRef.current.isHost) markPlayerDisconnected(conn.peer);
+      if (!stateRef.current.isHost) cleanupSession();
     });
   }
 
@@ -366,10 +376,6 @@ function App() {
       if (!stateRef.current.isHost && reason.toLowerCase().includes("name already taken")) {
         retryJoinWithNewName();
       }
-      return;
-    }
-    if (payload.type === "reset") {
-      applyReset();
       return;
     }
 
@@ -431,7 +437,7 @@ function App() {
   function handleAction(action, payload, fromId) {
     if (!stateRef.current.game) return;
     const playerIndex = stateRef.current.game.players.findIndex((p) => p.id === fromId);
-    if (action !== "restart" && playerIndex !== stateRef.current.game.turnIndex) return;
+    if (action !== "leave" && playerIndex !== stateRef.current.game.turnIndex) return;
     if (action === "roll") {
       if (!stateRef.current.game.started) startGame();
       rollDice();
@@ -440,10 +446,8 @@ function App() {
       if (!stateRef.current.game.started) return;
       moveToken(playerIndex, payload.tokenIndex);
     }
-    if (action === "restart") {
-      applyReset();
-      broadcast({ type: "reset" });
-      broadcastState();
+    if (action === "leave") {
+      handleLeave(fromId);
     }
   }
 
@@ -1088,41 +1092,81 @@ function App() {
     });
   }
 
-  function applyReset() {
-    const currentGame = stateRef.current.game;
-    if (!currentGame) return;
+  function cleanupSession() {
+    cleanupPeer();
+    stateRef.current.connections.clear();
+    stateRef.current.isHost = false;
+    stateRef.current.selfId = null;
+    stateRef.current.assignedIndex = null;
+    stateRef.current.roomId = null;
+    stateRef.current.game = null;
     if (stateRef.current.advanceTimeout) {
       clearTimeout(stateRef.current.advanceTimeout);
       stateRef.current.advanceTimeout = null;
     }
-    const players = currentGame.players.map((player) => ({
-      ...player,
-      tokens: [-1, -1, -1, -1],
-    }));
-    const newGame = initGame(players);
-    newGame.message = "Game reset";
-    updateGame(newGame, stateRef.current.assignedIndex);
+    if (stateRef.current.three.tokensGroup && stateRef.current.three.scene) {
+      stateRef.current.three.scene.remove(stateRef.current.three.tokensGroup);
+    }
+    stateRef.current.three.tokensGroup = null;
+    stateRef.current.three.tokenMeshes = [];
+    stateRef.current.three.diceRoll = null;
+    if (stateRef.current.three.diceMesh) {
+      stateRef.current.three.diceMesh.visible = false;
+      stateRef.current.three.diceMesh.rotation.set(0, 0, 0);
+    }
+    setRoomLocked(false);
+    setRoomId("");
+    setStatus("Disconnected");
     setChatLog([]);
     setChatInput("");
+    setVoiceWarning("");
+    setVoiceEnabled(false);
+    setAudioMuted(false);
+    updateGame(null, null);
+  }
+
+  function handleLeave(peerId) {
+    const currentGame = stateRef.current.game;
+    if (!currentGame) return;
+    const leavingPlayer = currentGame.players.find((player) => player.id === peerId);
+    const leavingName = leavingPlayer ? leavingPlayer.name : "Player";
+    if (stateRef.current.advanceTimeout) {
+      clearTimeout(stateRef.current.advanceTimeout);
+      stateRef.current.advanceTimeout = null;
+    }
+    const remaining = currentGame.players.filter((player) => player.id !== peerId);
+    const resetPlayers = remaining.map((player) => ({
+      ...player,
+      tokens: [-1, -1, -1, -1],
+      connected: true,
+    }));
+    const newGame = initGame(resetPlayers);
+    newGame.message = `${leavingName} left the table and doesn’t want to play.`;
+    stateRef.current.game = newGame;
+    if (peerId === stateRef.current.selfId) {
+      stateRef.current.assignedIndex = null;
+    }
+    const conn = stateRef.current.connections.get(peerId);
+    if (conn) conn.close();
     if (stateRef.current.three.diceMesh) {
       stateRef.current.three.diceMesh.rotation.set(0, 0, 0);
       stateRef.current.three.diceRoll = null;
     }
+    broadcastState();
   }
 
-  function requestRestart() {
+  function leaveRoom() {
     if (!stateRef.current.game) return;
     if (stateRef.current.isHost) {
-      applyReset();
-      broadcast({ type: "reset" });
-      broadcastState();
+      handleLeave(stateRef.current.selfId);
     } else {
-      sendToHost({ type: "action", action: "restart", payload: {} });
+      sendToHost({ type: "action", action: "leave", payload: {} });
+      cleanupSession();
     }
   }
 
   function resetPeer() {
-    requestRestart();
+    leaveRoom();
   }
 
   function generateRoomName() {
@@ -1286,6 +1330,24 @@ function App() {
             </p>
             <div className="button-row">
               <button onClick={() => setShowDisclaimer(false)}>I Understand</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showSystemNotice && (
+        <div className="disclaimer">
+          <div className="disclaimer-card">
+            <h2>System Notice</h2>
+            <p className="hint">{systemNoticeText}</p>
+            <div className="button-row">
+              <button
+                onClick={() => {
+                  setShowSystemNotice(false);
+                  cleanupSession();
+                }}
+              >
+                OK
+              </button>
             </div>
           </div>
         </div>
