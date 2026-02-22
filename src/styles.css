@@ -1,0 +1,521 @@
+:root {
+  color-scheme: light;
+  --bg: #0a0b10;
+  --bg-accent: #101326;
+  --panel: rgba(255, 255, 255, 0.06);
+  --panel-border: rgba(255, 255, 255, 0.14);
+  --text: #f6f7fb;
+  --muted: #a9b0c2;
+  --accent: #ff5f6d;
+  --accent-2: #36e2ff;
+  --red: #ff5f6d;
+  --blue: #41a9ff;
+  --yellow: #ffd166;
+  --green: #2edc98;
+  --shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Sora", system-ui, sans-serif;
+  background: radial-gradient(circle at top left, #1b1f3b, #0b0d16 55%, #090a12);
+  color: var(--text);
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+#root {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.app {
+  height: 100vh;
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 14px;
+  padding: 16px;
+}
+
+.disclaimer {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 8, 16, 0.72);
+  display: grid;
+  place-items: center;
+  z-index: 20;
+}
+
+.disclaimer-card {
+  width: min(420px, 90vw);
+  background: rgba(12, 14, 24, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  padding: 20px;
+  display: grid;
+  gap: 12px;
+  box-shadow: var(--shadow);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+h1 {
+  margin: 6px 0 0;
+  font-size: 28px;
+}
+
+.status {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--panel-border);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.layout {
+  position: relative;
+  height: 100%;
+  padding-bottom: 96px;
+}
+
+.board-wrap {
+  height: 100%;
+}
+
+.board {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 26px;
+  overflow: hidden;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.three-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.panel {
+  position: absolute;
+  top: 16px;
+  width: 300px;
+  display: grid;
+  gap: 12px;
+  z-index: 5;
+  padding: 12px;
+  border-radius: 18px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+
+.panel-left {
+  left: 16px;
+}
+
+.panel-right {
+  right: 16px;
+}
+
+.chat-log {
+  display: grid;
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+  overflow-x: hidden;
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  width: 100%;
+}
+
+.chat-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.chat-text {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.chat-item.system {
+  color: #ffd166;
+}
+
+.chat-name {
+  font-weight: 600;
+}
+
+.chat-input {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+}
+
+.icon-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+
+.card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(9, 10, 18, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.field-row {
+  display: grid;
+  gap: 6px;
+}
+
+input {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-size: 13px;
+}
+
+input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.button-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.button-row.single-line {
+  flex-wrap: nowrap;
+}
+
+button {
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, var(--accent), #ff8f4a);
+  color: #0a0b10;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 12px 20px rgba(255, 95, 109, 0.35);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: none;
+}
+
+.players {
+  display: grid;
+  gap: 8px;
+}
+
+.player-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.dot.red {
+  background: var(--red);
+}
+
+.dot.blue {
+  background: var(--blue);
+}
+
+.dot.yellow {
+  background: var(--yellow);
+}
+
+.dot.green {
+  background: var(--green);
+}
+
+.turn {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.dice {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 76px;
+  min-height: 46px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.chip {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: #0a0b10;
+  font-weight: 700;
+}
+
+.chip.red {
+  background: var(--red);
+}
+
+.chip.blue {
+  background: var(--blue);
+}
+
+.chip.yellow {
+  background: var(--yellow);
+}
+
+.chip.green {
+  background: var(--green);
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+@media (max-width: 900px) {
+  body {
+    overflow: auto;
+  }
+
+  .app {
+    height: auto;
+  }
+
+  .panel {
+    position: static;
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .panel-left {
+    display: grid;
+  }
+
+  .game-started .panel-left {
+    display: none;
+  }
+
+  .panel-right {
+    display: none;
+  }
+
+  .layout {
+    display: grid;
+    gap: 16px;
+    padding-bottom: 120px;
+  }
+
+  .board-wrap {
+    height: auto;
+  }
+
+  .board {
+    height: 56vh;
+  }
+
+  .bottom-controls {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 0;
+    transform: none;
+    width: auto;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .bottom-controls .turn {
+    text-align: center;
+    margin-right: 0;
+    font-size: 12px;
+  }
+
+  .bottom-controls button {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .bottom-controls .dice {
+    min-width: 54px;
+    min-height: 38px;
+    font-size: 22px;
+  }
+
+  .chat-log {
+    max-height: 140px;
+  }
+}
+
+@media (min-width: 901px) {
+  .panel-left,
+  .panel-right {
+    display: grid;
+  }
+
+  .panel {
+    max-height: calc(100vh - 32px);
+  }
+
+  .board {
+    height: 100%;
+  }
+}
+.bottom-controls {
+  position: fixed;
+  left: 50%;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0));
+  transform: translateX(-50%);
+  display: grid;
+  gap: 8px;
+  padding: 12px 20px 24px;
+  width: min(90vw, 900px);
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  z-index: 6;
+}
+
+.controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.controls-row:first-child {
+  font-size: 12px;
+}
+
+.controls-row:nth-child(2) button {
+  height: 40px;
+}
+
+.controls-row:nth-child(2) .dice {
+  height: 40px;
+  min-height: 40px;
+}
+
+.controls-row:last-child button {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+@media (min-width: 901px) {
+  .bottom-controls .controls-row:last-child {
+    display: none;
+  }
+}
+
+.bottom-controls .turn {
+  font-size: 13px;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+.bottom-controls .dice {
+  min-width: 62px;
+  min-height: 40px;
+  height: 40px;
+}
+
+.bottom-controls button {
+  padding: 8px 14px;
+}
