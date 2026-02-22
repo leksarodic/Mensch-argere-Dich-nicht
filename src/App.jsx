@@ -18,6 +18,7 @@ function cloneGame(game) {
 }
 
 function App() {
+  const appVersion = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
   const canvasRef = useRef(null);
   const boardRef = useRef(null);
   const stateRef = useRef({
@@ -71,6 +72,7 @@ function App() {
   const [chatInput, setChatInput] = useState("");
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [voiceWarning, setVoiceWarning] = useState("");
+  const [voiceModerationAvailable, setVoiceModerationAvailable] = useState(true);
   const [showDisclaimer, setShowDisclaimer] = useState(true);
   const [showSystemNotice, setShowSystemNotice] = useState(false);
   const [systemNoticeText, setSystemNoticeText] = useState("");
@@ -1211,6 +1213,12 @@ function App() {
       return;
     }
     if (stateRef.current.mediaStream) return;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setVoiceModerationAvailable(false);
+      setVoiceWarning("Voice moderation unavailable. Mic disabled.");
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getAudioTracks().forEach((track) => {
@@ -1274,6 +1282,8 @@ function App() {
   function initSpeechModeration() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
+      setVoiceModerationAvailable(false);
+      setVoiceWarning("Voice moderation unavailable. Mic disabled.");
       return;
     }
     if (stateRef.current.speechRecognition) return;
@@ -1287,8 +1297,16 @@ function App() {
         transcript += event.results[i][0].transcript;
       }
       if (!isChatClean(transcript)) {
+        if (stateRef.current.mediaStream) {
+          stateRef.current.mediaStream.getAudioTracks().forEach((track) => {
+            track.enabled = false;
+            track.stop();
+          });
+          stateRef.current.mediaStream = null;
+        }
+        setVoiceEnabled(false);
         togglePushToTalk(false);
-        setVoiceWarning("Voice blocked by safety filter.");
+        setVoiceWarning("Voice blocked by safety filter. Mic disabled.");
       }
     };
     recognition.onend = () => {
@@ -1357,7 +1375,10 @@ function App() {
           <div className="eyebrow">Mensch ärgere Dich nicht</div>
           <h1>3D P2P Table</h1>
         </div>
-        <div className="status">{status}</div>
+        <div className="header-right">
+          <div className="version">v{appVersion}</div>
+          <div className="status">{status}</div>
+        </div>
       </header>
 
       <div className="layout">
@@ -1464,7 +1485,11 @@ function App() {
             <h2>Voice</h2>
             <p className="hint">Hold to talk. Safety filter blocks harmful words.</p>
             <div className="button-row single-line">
-              <button className="ghost" onClick={enableVoice} disabled={!isInRoom || voiceEnabled}>
+              <button
+                className="ghost"
+                onClick={enableVoice}
+                disabled={!isInRoom || voiceEnabled || !voiceModerationAvailable}
+              >
                 Enable Mic
               </button>
               <button className="ghost" onClick={toggleMuteAll} disabled={!isInRoom}>

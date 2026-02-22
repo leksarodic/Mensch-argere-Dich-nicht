@@ -70,6 +70,18 @@ body {
   gap: 16px;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.version {
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+
 .eyebrow {
   text-transform: uppercase;
   letter-spacing: 0.2em;
