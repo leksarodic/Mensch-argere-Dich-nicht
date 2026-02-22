@@ -245,10 +245,35 @@ function App() {
       call.on("stream", (stream) => attachRemoteAudio(call.peer, stream));
       stateRef.current.mediaConnections.set(call.peer, call);
     });
-    peer.on("error", () => {
+    peer.on("error", (err) => {
+      if (err.type === "unavailable-id" && desiredId) {
+        setStatus("Room already exists. Joining instead.");
+        peer.destroy();
+        joinExistingRoom(desiredId);
+        return;
+      }
       setStatus("Peer error");
     });
     stateRef.current.peer = peer;
+  }
+
+  function joinExistingRoom(existingId) {
+    stateRef.current.isHost = false;
+    stateRef.current.roomId = existingId;
+    setRoomId(existingId);
+    setRoomLocked(true);
+    const peer = new Peer();
+    peer.on("open", () => {
+      stateRef.current.peer = peer;
+      const conn = peer.connect(existingId);
+      handleConnection(conn);
+      conn.on("open", () => {
+        conn.send({ type: "join", name: stateRef.current.selfName || "Guest" });
+      });
+    });
+    peer.on("error", () => {
+      setStatus("Peer error");
+    });
   }
 
   function cleanupPeer() {

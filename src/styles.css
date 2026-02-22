@@ -519,3 +519,6 @@ button:hover:not(:disabled) {
 .bottom-controls button {
   padding: 8px 14px;
 }
+  h1 {
+    font-size: 22px;
+  }
