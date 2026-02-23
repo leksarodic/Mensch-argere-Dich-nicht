@@ -122,6 +122,15 @@ body::after {
   height: 18px;
 }
 
+.guide-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text);
+}
+
 body.a11y-large-text {
   font-size: 110%;
 }
@@ -546,6 +555,11 @@ button:hover:not(:disabled) {
     font-size: 12px;
   }
 
+  .status {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
   .a11y-full {
     display: none;
   }
@@ -555,6 +569,10 @@ button:hover:not(:disabled) {
   }
 
   .version {
+    display: none;
+  }
+
+  .guide-btn {
     display: none;
   }
 }

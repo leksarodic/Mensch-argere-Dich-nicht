@@ -79,11 +79,13 @@ function App() {
   const [showSystemNotice, setShowSystemNotice] = useState(false);
   const [systemNoticeText, setSystemNoticeText] = useState("");
   const [showAccessibility, setShowAccessibility] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
   const [accessibility, setAccessibility] = useState({
     largeText: false,
     highContrast: false,
     reduceMotion: false,
   });
+  const [isHosting, setIsHosting] = useState(false);
   const [audioMuted, setAudioMuted] = useState(false);
   const [rooms, setRooms] = useState(() => {
     try {
@@ -150,6 +152,10 @@ function App() {
     };
     handleMobileMute();
     media.addEventListener("change", handleMobileMute);
+    const guideSeen = localStorage.getItem("guideSeen") === "true";
+    if (!guideSeen) {
+      setShowGuide(true);
+    }
     return () => {
       window.removeEventListener("resize", handleResize);
       media.removeEventListener("change", handleMobileMute);
@@ -1086,6 +1092,7 @@ function App() {
       return;
     }
     stateRef.current.isHost = true;
+    setIsHosting(true);
     stateRef.current.selfName = playerName.trim();
     const desiredRoom = roomId.trim() || generateRoomName();
     setRoomId(desiredRoom);
@@ -1103,6 +1110,7 @@ function App() {
     }
     if (!roomId.trim()) return;
     stateRef.current.isHost = false;
+    setIsHosting(false);
     stateRef.current.selfName = playerName.trim();
     stateRef.current.joinRetryCount = 0;
     stateRef.current.roomId = roomId.trim();
@@ -1126,6 +1134,7 @@ function App() {
     cleanupPeer();
     stateRef.current.connections.clear();
     stateRef.current.isHost = false;
+    setIsHosting(false);
     stateRef.current.selfId = null;
     stateRef.current.assignedIndex = null;
     stateRef.current.roomId = null;
@@ -1175,6 +1184,7 @@ function App() {
     stateRef.current.game = newGame;
     if (peerId === stateRef.current.selfId) {
       stateRef.current.assignedIndex = null;
+      setIsHosting(false);
     }
     const conn = stateRef.current.connections.get(peerId);
     if (conn) conn.close();
@@ -1476,12 +1486,43 @@ function App() {
           </div>
         </div>
       )}
+      {showGuide && (
+        <div className="disclaimer" role="dialog" aria-modal="true" aria-label="How to play">
+          <div className="disclaimer-card">
+            <h2>How to Play</h2>
+            <ol className="guide-list">
+              <li>Click Host to create a room name, then share it.</li>
+              <li>Others click Join and enter the same room name.</li>
+              <li>Roll a 6 to bring a token out onto the track.</li>
+              <li>Land on opponents to send them back (safe spots protect).</li>
+              <li>First to bring all four tokens home wins.</li>
+            </ol>
+            <div className="button-row">
+              <button
+                onClick={() => {
+                  localStorage.setItem("guideSeen", "true");
+                  setShowGuide(false);
+                }}
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <header className="header">
         <div>
           <div className="eyebrow">Mensch ärgere Dich nicht</div>
           <h1>3D P2P Table</h1>
         </div>
         <div className="header-right">
+          <button
+            className="ghost guide-btn"
+            onClick={() => setShowGuide(true)}
+            aria-label="Open how to play"
+          >
+            Guide
+          </button>
           <button
             className="ghost"
             onClick={() => setShowAccessibility(true)}
@@ -1524,7 +1565,7 @@ function App() {
               <button onClick={handleHost} disabled={!playerName.trim()}>
                 Host
               </button>
-              <button className="ghost" onClick={handleJoin} disabled={!playerName.trim() || !roomId.trim()}>
+              <button className="ghost" onClick={handleJoin} disabled={!playerName.trim() || !roomId.trim() || isHosting}>
                 Join
               </button>
               <button className="ghost" onClick={resetPeer} disabled={!game?.started}>
