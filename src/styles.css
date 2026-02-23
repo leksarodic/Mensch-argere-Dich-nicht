@@ -320,6 +320,12 @@ label {
   gap: 6px;
 }
 
+.room-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 input {
   padding: 10px 12px;
   border-radius: 10px;
@@ -573,6 +579,14 @@ button:hover:not(:disabled) {
   }
 
   .guide-btn {
+    display: none;
+  }
+
+  .sfx-btn {
+    display: none;
+  }
+
+  .room-actions {
     display: none;
   }
 }

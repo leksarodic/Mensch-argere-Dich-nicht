@@ -86,6 +86,7 @@ function App() {
     reduceMotion: false,
   });
   const [isHosting, setIsHosting] = useState(false);
+  const [copyNotice, setCopyNotice] = useState("");
   const [sfxEnabled, setSfxEnabled] = useState(() => {
     const saved = localStorage.getItem("sfxEnabled");
     return saved ? saved === "true" : true;
@@ -161,9 +162,28 @@ function App() {
     if (!guideSeen) {
       setShowGuide(true);
     }
+    const params = new URLSearchParams(window.location.search);
+    const roomParam = params.get("room");
+    if (roomParam) {
+      setRoomId(roomParam);
+    }
+    const handleUnload = () => {
+      if (!stateRef.current.game || !stateRef.current.peer) return;
+      if (stateRef.current.isHost) {
+        stateRef.current.connections.forEach((conn) => {
+          if (conn.open) {
+            conn.send({ type: "notice", text: "Host left the table.", action: "disconnect" });
+          }
+        });
+      } else {
+        sendToHost({ type: "action", action: "leave", payload: {} });
+      }
+    };
+    window.addEventListener("beforeunload", handleUnload);
     return () => {
       window.removeEventListener("resize", handleResize);
       media.removeEventListener("change", handleMobileMute);
+      window.removeEventListener("beforeunload", handleUnload);
       cleanupThree();
       cleanupPeer();
     };
@@ -204,12 +224,20 @@ function App() {
   }, [game, assignedIndex]);
 
   function updateGame(nextGame, nextAssignedIndex = assignedIndex) {
+    let resolvedIndex = nextAssignedIndex;
+    if (resolvedIndex === null && nextGame && stateRef.current.selfId) {
+      const found = nextGame.players.findIndex((player) => player.id === stateRef.current.selfId);
+      resolvedIndex = found >= 0 ? found : null;
+    }
     stateRef.current.game = nextGame;
-    stateRef.current.assignedIndex = nextAssignedIndex;
+    stateRef.current.assignedIndex = resolvedIndex;
     setGame(cloneGame(nextGame));
-    setAssignedIndex(nextAssignedIndex);
+    setAssignedIndex(resolvedIndex);
     if (stateRef.current.three.diceMesh) {
       stateRef.current.three.diceMesh.visible = Boolean(nextGame && nextGame.started);
+    }
+    if (stateRef.current.three.scene) {
+      renderTokens3D();
     }
   }
 
@@ -382,8 +410,10 @@ function App() {
       }
     });
     conn.on("close", () => {
+      if (stateRef.current.isHost) {
+        handleLeave(conn.peer);
+      }
       stateRef.current.connections.delete(conn.peer);
-      if (stateRef.current.isHost) markPlayerDisconnected(conn.peer);
       if (!stateRef.current.isHost) cleanupSession();
     });
   }
@@ -414,6 +444,7 @@ function App() {
     if (!payload || typeof payload !== "object") return;
     if (payload.type === "hello" && !stateRef.current.isHost) {
       setStatus(`Connected to ${conn.peer}`);
+      sendToHost({ type: "stateRequest" });
       return;
     }
     if (payload.type === "reject") {
@@ -424,8 +455,24 @@ function App() {
       }
       return;
     }
+    if (payload.type === "notice") {
+      setSystemNoticeText(payload.text || "System notice");
+      setShowSystemNotice(true);
+      if (payload.action === "disconnect") {
+        window.setTimeout(() => cleanupSession(), 300);
+      }
+      return;
+    }
 
     if (stateRef.current.isHost) {
+      if (payload.type === "stateRequest") {
+        if (!stateRef.current.game) return;
+        conn.send({
+          type: "state",
+          state: stateRef.current.game,
+          assignedIndex: stateRef.current.game.players.findIndex((p) => p.id === conn.peer),
+        });
+      }
       if (payload.type === "join") {
         const incomingName = (payload.name || "").trim();
         const nameTaken = stateRef.current.game?.players.some(
@@ -446,6 +493,9 @@ function App() {
       }
     } else if (payload.type === "state") {
       updateGame(payload.state, payload.assignedIndex);
+      window.setTimeout(() => {
+        renderTokens3D();
+      }, 0);
     } else if (payload.type === "chat") {
       appendChat(payload.name, payload.text, payload.from);
     }
@@ -798,6 +848,9 @@ function App() {
       stateRef.current.three.diceMesh = buildDiceMesh();
       stateRef.current.three.scene.add(stateRef.current.three.diceMesh);
     }
+    if (stateRef.current.game) {
+      renderTokens3D();
+    }
     if (!stateRef.current.three.animationId) animateThree();
   }
 
@@ -1114,6 +1167,22 @@ function App() {
     updateGame(newGame, 0);
   }
 
+  function buildJoinLink() {
+    const base = `${window.location.origin}${window.location.pathname}`;
+    return `${base}?room=${encodeURIComponent(roomId)}`;
+  }
+
+  async function copyToClipboard(text, message) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyNotice(message);
+      window.setTimeout(() => setCopyNotice(""), 1500);
+    } catch (_) {
+      setCopyNotice("Copy failed. Select and copy manually.");
+      window.setTimeout(() => setCopyNotice(""), 2000);
+    }
+  }
+
   function handleJoin() {
     if (showDisclaimer) return;
     if (!playerName.trim()) {
@@ -1186,13 +1255,18 @@ function App() {
       stateRef.current.advanceTimeout = null;
     }
     const remaining = currentGame.players.filter((player) => player.id !== peerId);
-    const resetPlayers = remaining.map((player) => ({
-      ...player,
-      tokens: [-1, -1, -1, -1],
-      connected: true,
-    }));
-    const newGame = initGame(resetPlayers);
-    newGame.message = `${leavingName} left the table and doesn’t want to play.`;
+    const newGame = initGame(remaining);
+    newGame.started = false;
+    newGame.dice = null;
+    newGame.message = `${leavingName} left the table.`;
+    const leavingIndex = currentGame.players.findIndex((player) => player.id === peerId);
+    if (leavingIndex === currentGame.turnIndex) {
+      newGame.turnIndex = currentGame.turnIndex % Math.max(remaining.length, 1);
+    } else if (leavingIndex < currentGame.turnIndex) {
+      newGame.turnIndex = Math.max(currentGame.turnIndex - 1, 0);
+    } else {
+      newGame.turnIndex = currentGame.turnIndex;
+    }
     stateRef.current.game = newGame;
     if (peerId === stateRef.current.selfId) {
       stateRef.current.assignedIndex = null;
@@ -1218,7 +1292,20 @@ function App() {
   }
 
   function resetPeer() {
-    leaveRoom();
+    if (!stateRef.current.game) return;
+    if (stateRef.current.isHost) {
+      stateRef.current.connections.forEach((conn) => {
+        if (conn.open) {
+          conn.send({ type: "notice", text: "Host left the table.", action: "disconnect" });
+        }
+      });
+      window.setTimeout(() => {
+        cleanupSession();
+      }, 300);
+    } else {
+      sendToHost({ type: "action", action: "leave", payload: {} });
+      cleanupSession();
+    }
   }
 
 
@@ -1501,7 +1588,6 @@ function App() {
               <button
                 onClick={() => {
                   setShowSystemNotice(false);
-                  cleanupSession();
                 }}
               >
                 OK
@@ -1581,7 +1667,7 @@ function App() {
         </div>
         <div className="header-right">
           <button
-            className="ghost"
+            className="ghost sfx-btn"
             onClick={() => setSfxEnabled((prev) => !prev)}
             aria-label="Toggle sound effects"
           >
@@ -1632,11 +1718,34 @@ function App() {
                 onChange={(event) => setRoomId(event.target.value)}
               />
             </div>
+            {roomId.trim() && (!game || game.players.length <= 1) && (
+              <div className="room-actions">
+                <button
+                  className="ghost"
+                  type="button"
+                  onClick={() => copyToClipboard(roomId.trim(), "Room name copied")}
+                >
+                  Copy Name
+                </button>
+                <button
+                  className="ghost"
+                  type="button"
+                  onClick={() => copyToClipboard(buildJoinLink(), "Join link copied")}
+                >
+                  Copy Link
+                </button>
+              </div>
+            )}
+            {copyNotice && <div className="hint">{copyNotice}</div>}
             <div className="button-row single-line">
-              <button onClick={handleHost} disabled={!playerName.trim()}>
+              <button onClick={handleHost} disabled={!playerName.trim() || isInRoom}>
                 Host
               </button>
-              <button className="ghost" onClick={handleJoin} disabled={!playerName.trim() || !roomId.trim() || isHosting}>
+              <button
+                className="ghost"
+                onClick={handleJoin}
+                disabled={!playerName.trim() || !roomId.trim() || isHosting || isInRoom}
+              >
                 Join
               </button>
               <button className="ghost" onClick={resetPeer} disabled={!game?.started}>
