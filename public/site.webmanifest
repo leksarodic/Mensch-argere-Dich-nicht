@@ -1,0 +1,16 @@
+{
+  "name": "Don't Be Angry — 3D P2P",
+  "short_name": "DontBeAngry",
+  "description": "3D P2P Mensch ärgere Dich nicht.",
+  "start_url": "/Mensch-argere-Dich-nicht/",
+  "display": "standalone",
+  "background_color": "#0b0d16",
+  "theme_color": "#0b0d16",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
