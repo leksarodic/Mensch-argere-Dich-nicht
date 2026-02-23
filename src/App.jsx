@@ -7,9 +7,9 @@ const SAFE_INDICES = new Set([0, 10, 20, 30]);
 const START_INDICES = [0, 10, 20, 30];
 const MAX_ROOMS = 5;
 const BLOCKLIST = ["badword", "hate", "racist", "stupid", "idiot"];
-const BAD_WORDS_CACHE_KEY = "badWordsCacheV1";
+const BAD_WORDS_CACHE_KEY = "badWordsCacheV11";
 const BAD_WORDS_CACHE_TTL = 1000 * 60 * 60 * 24 * 7;
-const BAD_WORDS_LOCAL_URL = "/bad-words-all.txt";
+const BAD_WORDS_LOCAL_URL = "bad-words-all.txt";
 
 function cloneGame(game) {
   if (!game) return null;
@@ -56,6 +56,8 @@ function App() {
     speechRecognition: null,
     speechRecognizing: false,
     badWordsSet: new Set(BLOCKLIST),
+    badWordTokens: new Set(),
+    badWordPhrases: [],
     advanceTimeout: null,
     joinRetryCount: 0,
     voiceGateOpen: false,
@@ -259,6 +261,9 @@ function App() {
         const parsed = JSON.parse(cached);
         if (Date.now() - parsed.timestamp < BAD_WORDS_CACHE_TTL) {
           stateRef.current.badWordsSet = new Set(parsed.words);
+          const { tokens, phrases } = buildBadWordLookup(parsed.words);
+          stateRef.current.badWordTokens = tokens;
+          stateRef.current.badWordPhrases = phrases;
           return;
         }
       }
@@ -267,19 +272,29 @@ function App() {
     }
 
     try {
-      const text = await fetch(BAD_WORDS_LOCAL_URL).then((r) => r.text());
+      const baseUrl = typeof import.meta !== "undefined" ? import.meta.env.BASE_URL : "/";
+      const text = await fetch(`${baseUrl}${BAD_WORDS_LOCAL_URL}`).then((r) => r.text());
+      if (text.includes("the server is configured with a public base url")) {
+        throw new Error("Bad words list fetch failed");
+      }
       const words = text
         .split(/\r?\n/)
-        .map((line) => line.trim())
+        .map((line) => line.trim().replace(/^[-–—]\s*/, ""))
         .filter(Boolean)
         .map((word) => word.toLowerCase());
       stateRef.current.badWordsSet = new Set(words);
+      const { tokens, phrases } = buildBadWordLookup(words);
+      stateRef.current.badWordTokens = tokens;
+      stateRef.current.badWordPhrases = phrases;
       localStorage.setItem(
         BAD_WORDS_CACHE_KEY,
         JSON.stringify({ timestamp: Date.now(), words })
       );
     } catch (_) {
       stateRef.current.badWordsSet = new Set(BLOCKLIST);
+      const { tokens, phrases } = buildBadWordLookup(BLOCKLIST);
+      stateRef.current.badWordTokens = tokens;
+      stateRef.current.badWordPhrases = phrases;
     }
   }
 
@@ -575,12 +590,75 @@ function App() {
   }
 
   function isChatClean(text) {
-    const lower = text.toLowerCase();
-    const words = stateRef.current.badWordsSet || new Set(BLOCKLIST);
-    for (const word of words) {
-      if (word && lower.includes(word)) return false;
+    const tokens = tokenizeNormalized(text);
+    const badTokens = stateRef.current.badWordTokens || new Set();
+    for (const token of tokens) {
+      if (badTokens.has(token)) return false;
+    }
+    const phrases = stateRef.current.badWordPhrases || [];
+    if (phrases.length && tokens.length) {
+      const tokensString = ` ${tokens.join(" ")} `;
+      for (const phrase of phrases) {
+        if (tokensString.includes(` ${phrase} `)) return false;
+      }
     }
     return true;
+  }
+
+  function normalizeToken(value) {
+    const map = {
+      "0": "o",
+      "1": "i",
+      "!": "i",
+      "3": "e",
+      "4": "a",
+      "5": "s",
+      "$": "s",
+      "7": "t",
+      "8": "b",
+      "9": "g",
+      "@": "a",
+    };
+    return value
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .split("")
+      .map((ch) => map[ch] || ch)
+      .join("")
+      .replace(/[^a-z0-9]/gi, "");
+  }
+
+  function tokenizeNormalized(text) {
+    return text
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .split(/\s+/)
+      .map((token) => normalizeToken(token))
+      .filter((token) => token.length >= 3);
+  }
+
+  function buildBadWordLookup(words) {
+    const tokens = new Set();
+    const phrases = [];
+    words.forEach((raw) => {
+      const cleaned = raw.trim().replace(/^[-–—]\s*/, "");
+      if (!cleaned) return;
+      const base = cleaned.replace(/\*/g, "");
+      if (/\s/.test(cleaned)) {
+        const parts = cleaned
+          .split(/\s+/)
+          .map((p) => normalizeToken(p))
+          .filter((p) => p.length >= 3);
+        if (parts.length < 2) return;
+        phrases.push(parts.join(" "));
+        return;
+      }
+      const norm = normalizeToken(base || cleaned);
+      if (norm.length >= 3) tokens.add(norm);
+    });
+    return { tokens, phrases };
   }
 
   function rollDice() {
