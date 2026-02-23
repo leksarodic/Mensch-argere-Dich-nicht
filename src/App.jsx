@@ -122,6 +122,15 @@ function App() {
     return status.startsWith("Connected");
   }, [status]);
 
+  const shouldGlowStart = useMemo(() => {
+    return Boolean(
+      stateRef.current.isHost &&
+        game &&
+        !game.started &&
+        String(game.message || "").toLowerCase() === "waiting to start"
+    );
+  }, [game]);
+
   useEffect(() => {
     const boardEl = boardRef.current;
     const canvas = canvasRef.current;
@@ -1942,7 +1951,7 @@ function App() {
           <div className="controls-row">{turnText}</div>
           <div className="controls-row">
             <button
-              className="ghost"
+              className={`ghost${shouldGlowStart ? " start-glow" : ""}`}
               onClick={startGame}
               disabled={!stateRef.current.isHost || game?.started}
             >
