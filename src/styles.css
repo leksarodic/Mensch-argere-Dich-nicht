@@ -110,6 +110,55 @@ body::after {
   letter-spacing: 0.08em;
 }
 
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.toggle-row input {
+  width: 18px;
+  height: 18px;
+}
+
+body.a11y-large-text {
+  font-size: 110%;
+}
+
+body.a11y-large-text h1 {
+  font-size: 32px;
+}
+
+body.a11y-large-text h2 {
+  font-size: 18px;
+}
+
+body.a11y-large-text .status {
+  font-size: 18px !important;
+  line-height: 1.2;
+  padding: 12px 18px;
+}
+
+.a11y-short {
+  display: none;
+}
+
+body.a11y-high-contrast {
+  --panel: rgba(255, 255, 255, 0.14);
+  --panel-border: rgba(255, 255, 255, 0.4);
+  --text: #ffffff;
+  --muted: #d5d7df;
+  --accent: #ff8b4a;
+}
+
+body.a11y-reduced-motion *,
+body.a11y-reduced-motion *::before,
+body.a11y-reduced-motion *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
 .eyebrow {
   text-transform: uppercase;
   letter-spacing: 0.2em;
@@ -487,6 +536,27 @@ button:hover:not(:disabled) {
   select {
     font-size: 16px;
   }
+
+  h1 {
+    font-size: 22px;
+  }
+
+  .header-right .ghost {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .a11y-full {
+    display: none;
+  }
+
+  .a11y-short {
+    display: inline;
+  }
+
+  .version {
+    display: none;
+  }
 }
 
 @media (min-width: 901px) {
@@ -501,6 +571,10 @@ button:hover:not(:disabled) {
 
   .board {
     height: 100%;
+  }
+
+  .version {
+    display: inline-block;
   }
 }
 .bottom-controls {
@@ -565,6 +639,3 @@ button:hover:not(:disabled) {
 .bottom-controls button {
   padding: 8px 14px;
 }
-  h1 {
-    font-size: 22px;
-  }

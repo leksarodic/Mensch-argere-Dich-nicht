@@ -78,6 +78,12 @@ function App() {
   const [showDisclaimer, setShowDisclaimer] = useState(true);
   const [showSystemNotice, setShowSystemNotice] = useState(false);
   const [systemNoticeText, setSystemNoticeText] = useState("");
+  const [showAccessibility, setShowAccessibility] = useState(false);
+  const [accessibility, setAccessibility] = useState({
+    largeText: false,
+    highContrast: false,
+    reduceMotion: false,
+  });
   const [audioMuted, setAudioMuted] = useState(false);
   const [rooms, setRooms] = useState(() => {
     try {
@@ -119,6 +125,19 @@ function App() {
     };
     window.addEventListener("resize", handleResize);
     loadBadWords();
+    const savedA11y = localStorage.getItem("a11ySettings");
+    if (savedA11y) {
+      try {
+        const parsed = JSON.parse(savedA11y);
+        setAccessibility({
+          largeText: Boolean(parsed.largeText),
+          highContrast: Boolean(parsed.highContrast),
+          reduceMotion: Boolean(parsed.reduceMotion),
+        });
+      } catch (_) {
+        // ignore
+      }
+    }
     const media = window.matchMedia("(max-width: 900px)");
     const handleMobileMute = () => {
       isMobileRef.current = media.matches;
@@ -138,6 +157,13 @@ function App() {
       cleanupPeer();
     };
   }, []);
+
+  useEffect(() => {
+    document.body.classList.toggle("a11y-large-text", accessibility.largeText);
+    document.body.classList.toggle("a11y-high-contrast", accessibility.highContrast);
+    document.body.classList.toggle("a11y-reduced-motion", accessibility.reduceMotion);
+    localStorage.setItem("a11ySettings", JSON.stringify(accessibility));
+  }, [accessibility]);
 
   useEffect(() => {
     if (!game) {
@@ -1410,12 +1436,60 @@ function App() {
           </div>
         </div>
       )}
+      {showAccessibility && (
+        <div className="disclaimer" role="dialog" aria-modal="true" aria-label="Accessibility options">
+          <div className="disclaimer-card">
+            <h2>Accessibility</h2>
+            <label className="toggle-row">
+              <input
+                type="checkbox"
+                checked={accessibility.largeText}
+                onChange={(event) =>
+                  setAccessibility({ ...accessibility, largeText: event.target.checked })
+                }
+              />
+              <span>Large text</span>
+            </label>
+            <label className="toggle-row">
+              <input
+                type="checkbox"
+                checked={accessibility.highContrast}
+                onChange={(event) =>
+                  setAccessibility({ ...accessibility, highContrast: event.target.checked })
+                }
+              />
+              <span>High contrast</span>
+            </label>
+            <label className="toggle-row">
+              <input
+                type="checkbox"
+                checked={accessibility.reduceMotion}
+                onChange={(event) =>
+                  setAccessibility({ ...accessibility, reduceMotion: event.target.checked })
+                }
+              />
+              <span>Reduce motion</span>
+            </label>
+            <div className="button-row">
+              <button onClick={() => setShowAccessibility(false)}>Done</button>
+            </div>
+          </div>
+        </div>
+      )}
       <header className="header">
         <div>
           <div className="eyebrow">Mensch ärgere Dich nicht</div>
           <h1>3D P2P Table</h1>
         </div>
         <div className="header-right">
+          <button
+            className="ghost"
+            onClick={() => setShowAccessibility(true)}
+            aria-label="Open accessibility options"
+          >
+            <span className="a11y-full">Accessibility</span>
+            <span className="a11y-short">A11y</span>
+          </button>
           <div className="version">v{appVersion}</div>
           <div className="status">{status}</div>
         </div>
