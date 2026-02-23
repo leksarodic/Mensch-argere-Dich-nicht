@@ -86,6 +86,10 @@ function App() {
     reduceMotion: false,
   });
   const [isHosting, setIsHosting] = useState(false);
+  const [sfxEnabled, setSfxEnabled] = useState(() => {
+    const saved = localStorage.getItem("sfxEnabled");
+    return saved ? saved === "true" : true;
+  });
   const [audioMuted, setAudioMuted] = useState(false);
   const [rooms, setRooms] = useState(() => {
     try {
@@ -99,6 +103,7 @@ function App() {
   const isMobileRef = useRef(false);
   const leftMessageHandledRef = useRef(false);
   const prevRollIdRef = useRef(null);
+  const audioCtxRef = useRef(null);
 
   const isMyTurn = useMemo(() => {
     if (!game || assignedIndex === null) return false;
@@ -163,6 +168,11 @@ function App() {
       cleanupPeer();
     };
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("sfxEnabled", String(sfxEnabled));
+  }, [sfxEnabled]);
+
 
   useEffect(() => {
     document.body.classList.toggle("a11y-large-text", accessibility.largeText);
@@ -458,6 +468,7 @@ function App() {
       tokens: [-1, -1, -1, -1],
       connected: true,
     });
+    playSfx("join");
     conn.send({ type: "state", state: stateRef.current.game, assignedIndex: index });
     broadcastState();
   }
@@ -580,6 +591,7 @@ function App() {
     } else {
       advanceTurn(roll === 6);
     }
+    playSfx("move");
     broadcastState();
   }
 
@@ -1209,6 +1221,7 @@ function App() {
     leaveRoom();
   }
 
+
   function generateRoomName() {
     const adjectives = ["sunny", "brave", "rapid", "lucky", "bright", "calm", "spark", "nova"];
     const nouns = ["forest", "comet", "tiger", "river", "pulse", "nebula", "rider", "glow"];
@@ -1220,6 +1233,7 @@ function App() {
   function handleRoll() {
     if (showDisclaimer) return;
     if (!stateRef.current.game) return;
+    playSfx("roll");
     if (stateRef.current.isHost) {
       if (!stateRef.current.game.started) startGame();
       rollDice();
@@ -1243,6 +1257,56 @@ function App() {
       sendToHost({ type: "chat", name: playerName || "Guest", text });
     }
     setChatInput("");
+  }
+
+  function ensureAudioContext() {
+    if (!audioCtxRef.current) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return null;
+      audioCtxRef.current = new AudioCtx();
+    }
+    if (audioCtxRef.current.state === "suspended") {
+      audioCtxRef.current.resume();
+    }
+    return audioCtxRef.current;
+  }
+
+  function playTone({ freq, duration = 0.12, type = "sine", gain = 0.06 }) {
+    if (!sfxEnabled) return;
+    const ctx = ensureAudioContext();
+    if (!ctx) return;
+    try {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      g.gain.value = gain;
+      osc.connect(g);
+      g.connect(ctx.destination);
+      const now = ctx.currentTime;
+      g.gain.setValueAtTime(gain, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + duration);
+      osc.start(now);
+      osc.stop(now + duration);
+    } catch (_) {
+      // ignore audio failures
+    }
+  }
+
+  function playSfx(name) {
+    if (!sfxEnabled) return;
+    if (name === "roll") {
+      playTone({ freq: 520, duration: 0.08, type: "square", gain: 0.05 });
+      window.setTimeout(() => playTone({ freq: 720, duration: 0.08, type: "square", gain: 0.05 }), 70);
+      window.setTimeout(() => playTone({ freq: 880, duration: 0.06, type: "square", gain: 0.05 }), 140);
+    }
+    if (name === "move") {
+      playTone({ freq: 420, duration: 0.06, type: "triangle", gain: 0.05 });
+    }
+    if (name === "join") {
+      playTone({ freq: 360, duration: 0.08, type: "sine", gain: 0.05 });
+      window.setTimeout(() => playTone({ freq: 520, duration: 0.1, type: "sine", gain: 0.05 }), 90);
+    }
   }
 
   async function enableVoice() {
@@ -1516,6 +1580,13 @@ function App() {
           <h1>3D P2P Table</h1>
         </div>
         <div className="header-right">
+          <button
+            className="ghost"
+            onClick={() => setSfxEnabled((prev) => !prev)}
+            aria-label="Toggle sound effects"
+          >
+            {sfxEnabled ? "SFX On" : "SFX Off"}
+          </button>
           <button
             className="ghost guide-btn"
             onClick={() => setShowGuide(true)}
