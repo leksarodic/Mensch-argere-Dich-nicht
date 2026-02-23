@@ -7,7 +7,7 @@ const SAFE_INDICES = new Set([0, 10, 20, 30]);
 const START_INDICES = [0, 10, 20, 30];
 const MAX_ROOMS = 5;
 const BLOCKLIST = ["badword", "hate", "racist", "stupid", "idiot"];
-const BAD_WORDS_CACHE_KEY = "badWordsCacheV11";
+const BAD_WORDS_CACHE_KEY = "badWordsCache_1771853222";
 const BAD_WORDS_CACHE_TTL = 1000 * 60 * 60 * 24 * 7;
 const BAD_WORDS_LOCAL_URL = "bad-words-all.txt";
 
@@ -103,6 +103,7 @@ function App() {
     }
   });
   const chatInputRef = useRef(null);
+  const chatLogRef = useRef(null);
   const isMobileRef = useRef(false);
   const leftMessageHandledRef = useRef(false);
   const prevRollIdRef = useRef(null);
@@ -224,6 +225,11 @@ function App() {
       setShowSystemNotice(true);
     }
   }, [game, assignedIndex]);
+
+  useEffect(() => {
+    if (!chatLogRef.current) return;
+    chatLogRef.current.scrollTop = chatLogRef.current.scrollHeight;
+  }, [chatLog]);
 
   function updateGame(nextGame, nextAssignedIndex = assignedIndex) {
     let resolvedIndex = nextAssignedIndex;
@@ -1856,7 +1862,7 @@ function App() {
           <div className="card">
             <h2>Chat</h2>
             {chatLog.length > 0 && (
-              <div className="chat-log">
+              <div className="chat-log" ref={chatLogRef}>
                 {chatLog.map((msg) => (
                   <div key={msg.id} className={`chat-item ${msg.from === "system" ? "system" : ""}`}>
                     <span className="chat-name">{msg.name}:</span>
