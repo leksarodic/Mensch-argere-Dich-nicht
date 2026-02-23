@@ -58,6 +58,8 @@ function App() {
     badWordsSet: new Set(BLOCKLIST),
     advanceTimeout: null,
     joinRetryCount: 0,
+    voiceGateOpen: false,
+    voiceGateTimer: null,
   });
 
   const [status, setStatus] = useState("Disconnected");
@@ -1225,6 +1227,7 @@ function App() {
         track.enabled = false;
       });
       stateRef.current.mediaStream = stream;
+      stateRef.current.voiceGateOpen = false;
       setVoiceEnabled(true);
       setVoiceWarning("");
       stateRef.current.connections.forEach((conn) => {
@@ -1241,12 +1244,27 @@ function App() {
   function togglePushToTalk(active) {
     if (audioMuted) return;
     if (!stateRef.current.mediaStream) return;
-    stateRef.current.mediaStream.getAudioTracks().forEach((track) => {
-      track.enabled = active;
-    });
     if (active) {
+      stateRef.current.voiceGateOpen = false;
+      stateRef.current.mediaStream.getAudioTracks().forEach((track) => {
+        track.enabled = false;
+      });
       startSpeechModeration();
+      if (stateRef.current.voiceGateTimer) {
+        clearTimeout(stateRef.current.voiceGateTimer);
+      }
+      stateRef.current.voiceGateTimer = window.setTimeout(() => {
+        if (!stateRef.current.voiceGateOpen) {
+          stopSpeechModeration();
+          setVoiceWarning("Voice moderation not detected. Mic disabled.");
+        }
+        stateRef.current.voiceGateTimer = null;
+      }, 1000);
     } else {
+      stateRef.current.mediaStream.getAudioTracks().forEach((track) => {
+        track.enabled = false;
+      });
+      stateRef.current.voiceGateOpen = false;
       stopSpeechModeration();
     }
   }
@@ -1305,12 +1323,34 @@ function App() {
           stateRef.current.mediaStream = null;
         }
         setVoiceEnabled(false);
+        stateRef.current.voiceGateOpen = false;
         togglePushToTalk(false);
         setVoiceWarning("Voice blocked by safety filter. Mic disabled.");
+        return;
       }
+      if (stateRef.current.mediaStream && !stateRef.current.voiceGateOpen) {
+        stateRef.current.mediaStream.getAudioTracks().forEach((track) => {
+          track.enabled = true;
+        });
+        stateRef.current.voiceGateOpen = true;
+      }
+    };
+    recognition.onerror = () => {
+      if (stateRef.current.mediaStream) {
+        stateRef.current.mediaStream.getAudioTracks().forEach((track) => {
+          track.enabled = false;
+        });
+      }
+      stateRef.current.voiceGateOpen = false;
     };
     recognition.onend = () => {
       stateRef.current.speechRecognizing = false;
+      if (stateRef.current.mediaStream) {
+        stateRef.current.mediaStream.getAudioTracks().forEach((track) => {
+          track.enabled = false;
+        });
+      }
+      stateRef.current.voiceGateOpen = false;
     };
     stateRef.current.speechRecognition = recognition;
   }
@@ -1483,7 +1523,7 @@ function App() {
 
           <div className="card">
             <h2>Voice</h2>
-            <p className="hint">Hold to talk. Safety filter blocks harmful words.</p>
+            <p className="hint">Hold to talk.</p>
             <div className="button-row single-line">
               <button
                 className="ghost"
