@@ -9,7 +9,7 @@ const MAX_ROOMS = 5;
 const BLOCKLIST = ["badword", "hate", "racist", "stupid", "idiot"];
 const BAD_WORDS_CACHE_KEY = "badWordsCacheV1";
 const BAD_WORDS_CACHE_TTL = 1000 * 60 * 60 * 24 * 7;
-const BAD_WORDS_LOCAL_URL = "/bad-words-en.txt";
+const BAD_WORDS_LOCAL_URL = "/bad-words-all.txt";
 
 function cloneGame(game) {
   if (!game) return null;
